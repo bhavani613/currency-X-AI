@@ -1,0 +1,1 @@
+"""CurrencyX AI application package."""
