@@ -81,7 +81,13 @@ export async function analyzePayment({
   }
 
   const data = await res.json();
-  return normalizeAnalysisResponse(data);
+  return normalizeAnalysisResponse(data, {
+    amount,
+    sourceCurrency,
+    destinationCountry,
+    destinationCurrency,
+    purpose,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +98,7 @@ export async function analyzePayment({
 const METHOD_IDS = {
   "Smart Payment": "SMART",
   "Bank Transfer": "BANK_TRANSFER",
+  UPI: "UPI",
   "Debit Card": "DEBIT_CARD",
   "Credit Card": "CREDIT_CARD",
 };
@@ -99,6 +106,7 @@ const METHOD_IDS = {
 const METHOD_TAGLINES = {
   SMART: "Best balance of cost & speed",
   BANK_TRANSFER: "Traditional & reliable",
+  UPI: "Fast & low-cost",
   DEBIT_CARD: "Instant but costlier",
   CREDIT_CARD: "Pay now, settle later",
 };
@@ -106,17 +114,27 @@ const METHOD_TAGLINES = {
 const METHOD_SPEEDS = {
   SMART: "1-2 business days",
   BANK_TRANSFER: "2-4 business days",
+  UPI: "Within minutes",
   DEBIT_CARD: "Within minutes",
   CREDIT_CARD: "Within minutes",
 };
 
-function normalizeAnalysisResponse(data) {
+function normalizeAnalysisResponse(
+  data,
+  { amount, sourceCurrency, destinationCountry, destinationCurrency, purpose } = {}
+) {
   const currencySymbols = {
+    INR: "₹",
     GBP: "£",
     USD: "$",
     AED: "AED ",
     AUD: "A$",
     CAD: "C$",
+    SGD: "S$",
+    EUR: "€",
+    JPY: "¥",
+    CHF: "Fr",
+    NZD: "NZ$",
   };
 
   const payment = data.payment || {};
@@ -135,6 +153,7 @@ function normalizeAnalysisResponse(data) {
       speed: METHOD_SPEEDS[id] || "1-4 business days",
       fxMarkupPct: amount > 0 ? +((fee / amount) * 100).toFixed(1) : 0,
       totalFees: +fee.toFixed(2),
+      totalCost: +(amount + fee).toFixed(2),
       recipientAmount: +(
         transferable * (data.exchange_rate || 0)
       ).toFixed(2),
@@ -162,6 +181,9 @@ function normalizeAnalysisResponse(data) {
     },
     recipientAmount: recipient.estimated_amount ?? 0,
     recipientCurrency: recipient.currency ?? "",
+    // INR equivalents used for the Razorpay checkout (INR-only) flow.
+    amountInInr: data.amount_in_inr ?? null,
+    totalCostInInr: data.total_cost_in_inr ?? null,
     methods,
     savings: rec.potential_savings ?? 0,
     recommendation: rec.method ?? "",
@@ -185,18 +207,49 @@ export async function getTransaction(id) {
   return MOCK_TRANSACTIONS.find((t) => t.id === id) || null;
 }
 
-/** loginUser — placeholder for POST /auth/login */
-export async function loginUser({ email, password }) {
-  await wait();
-  // Real API: POST ${API_BASE_URL}/auth/login
-  return { ok: true, email };
+/** Shared JSON POST helper with the standard error handling. */
+async function postJSON(path, body, connectionError) {
+  let res;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    // fetch only throws on network-level failures (backend down, CORS block)
+    throw new Error(connectionError);
+  }
+  if (!res.ok) {
+    throw await extractBackendError(res);
+  }
+  return res.json();
 }
 
-/** signupUser — placeholder for POST /auth/signup */
-export async function signupUser({ fullName, email, password }) {
-  await wait();
-  // Real API: POST ${API_BASE_URL}/auth/signup
-  return { ok: true, fullName, email };
+/**
+ * loginUser — POST /auth/login against the FastAPI + PostgreSQL backend.
+ * Returns { success, user: { id, full_name, email }, access_token }.
+ * Throws a clean Error with the backend message on invalid credentials.
+ */
+export function loginUser({ email, password }) {
+  return postJSON(
+    "/auth/login",
+    { email, password },
+    CONNECTION_ERROR
+  );
+}
+
+/**
+ * signupUser — POST /auth/signup. The account is created in PostgreSQL
+ * with a bcrypt password hash (never sent or stored in plaintext).
+ * Throws with the backend message on duplicate email / validation errors.
+ */
+export function signupUser({ fullName, email, password }) {
+  return postJSON(
+    "/auth/signup",
+    { full_name: fullName, email, password },
+    CONNECTION_ERROR
+  );
 }
 
 /** logoutUser — placeholder for POST /auth/logout (or client-side clear) */

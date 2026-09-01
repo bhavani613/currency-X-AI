@@ -16,6 +16,7 @@ import Footer from "../components/Footer";
 import Loading from "../components/Loading";
 import { askAdvisor, getAdvisorInsights, analyzePayment } from "../services/api";
 import { COUNTRIES, PURPOSES } from "../services/mockData";
+import { CURRENCIES, currencySymbol } from "../services/currencies";
 
 const SUGGESTED = [
   "What's the cheapest way to send ₹1 lakh to the UK?",
@@ -184,7 +185,7 @@ export default function AIAdvisor() {
           <div className="field">
             <label htmlFor="adv-amount">Amount you send</label>
             <div className="input-wrap">
-              <span className="input-prefix">₹</span>
+              <span className="input-prefix">{currencySymbol(aform.sourceCurrency)}</span>
               <input
                 id="adv-amount"
                 type="number"
@@ -253,7 +254,11 @@ export default function AIAdvisor() {
                 value={aform.sourceCurrency}
                 onChange={(e) => setAform({ ...aform, sourceCurrency: e.target.value })}
               >
-                <option value="INR">INR</option>
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} — {c.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

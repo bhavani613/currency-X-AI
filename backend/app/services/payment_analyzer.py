@@ -25,15 +25,44 @@ from app.schemas.payment import (
 # Configuration
 # ---------------------------------------------------------------------------
 
-#: Exchange rates expressed as *destination currency per 1 unit of source
-#: currency*.  For this prototype the source currency is **INR**.
+#: Exchange rates expressed as *destination currency per 1 unit of INR*.
 #: e.g. ``"GBP": 0.0088`` means 1 INR = 0.0088 GBP.
+#: Requests made in other source currencies are converted to their INR
+#: equivalent first (see ``SOURCE_TO_INR``) and the published per-source-unit
+#: rate is derived from these cross rates.
 EXCHANGE_RATES: dict[str, float] = {
     "GBP": 0.0088,
     "USD": 0.0116,
     "AED": 0.044,
     "AUD": 0.018,
     "CAD": 0.0158,
+    "SGD": 0.0156,
+    "EUR": 0.0107,
+    "JPY": 1.72,
+    "CHF": 0.0093,
+    "NZD": 0.0195,
+    "INR": 1.0,
+}
+
+#: Supported source currencies and their prototype INR conversion rate
+#: (1 unit of the source currency = N INR).
+SOURCE_CURRENCIES: list[str] = [
+    "INR", "USD", "EUR", "GBP", "CAD", "AUD",
+    "SGD", "AED", "JPY", "CHF", "NZD",
+]
+
+SOURCE_TO_INR: dict[str, float] = {
+    "INR": 1.0,
+    "USD": 86.2,
+    "EUR": 93.0,
+    "GBP": 107.5,
+    "CAD": 62.4,
+    "AUD": 55.6,
+    "SGD": 64.1,
+    "AED": 23.5,
+    "JPY": 0.58,
+    "CHF": 98.9,
+    "NZD": 51.2,
 }
 
 #: Fee configuration for every supported payment method.
@@ -54,6 +83,12 @@ PAYMENT_METHOD_CONFIG: dict[str, dict[str, float]] = {
         "fx_markup_percentage": 2.0,
         "processing_fee_percentage": 0.7,
         "other_charges_percentage": 0.5,
+    },
+    "UPI": {
+        "fee_percentage": 1.2,
+        "fx_markup_percentage": 0.6,
+        "processing_fee_percentage": 0.3,
+        "other_charges_percentage": 0.3,
     },
     "Debit Card": {
         "fee_percentage": 4.1,
@@ -128,25 +163,55 @@ class PaymentAnalyzer:
             currency.
         """
         amount: float = request.amount
-        dest_currency: str = request.destination_currency
+        src_currency: str = request.source_currency.upper()
+        dest_currency: str = request.destination_currency.upper()
 
-        exchange_rate = self._get_exchange_rate(dest_currency)
-        if exchange_rate is None:
+        # --- Validate the source currency against the prototype config ----
+        if src_currency not in SOURCE_TO_INR:
             raise ValueError(
-                f"No exchange rate configured for destination currency "
-                f"'{dest_currency}'. Supported currencies: "
-                f"{sorted(self._exchange_rates.keys())}."
+                f"Unsupported source currency '{src_currency}'. "
+                f"Supported source currencies: {SOURCE_CURRENCIES}."
             )
+
+        # --- Same-currency transfers need no FX conversion ----------------
+        same_currency = src_currency == dest_currency
+        if same_currency:
+            exchange_rate = 1.0
+        else:
+            inr_rate = self._get_exchange_rate(dest_currency)
+            if inr_rate is None:
+                raise ValueError(
+                    f"No exchange rate configured for destination currency "
+                    f"'{dest_currency}'. Supported destination currencies: "
+                    f"{sorted(k for k in self._exchange_rates if k != 'INR')}."
+                )
+            # Rates are stored as destination-per-INR; publish the rate per
+            # 1 unit of the *selected source* currency via the INR cross rate:
+            # (dest/INR) × (INR/src) = dest/src.
+            exchange_rate = round(inr_rate * SOURCE_TO_INR[src_currency], 6)
+
+        # All fee amounts are calculated on the INR equivalent of the
+        # source amount so percentages stay consistent across currencies.
+        base_inr = round(amount * SOURCE_TO_INR[src_currency], 2)
 
         # --- Build a summary entry for every payment method ---------------
         method_summaries: list[dict[str, float | str]] = []
         for name, config in self._method_config.items():
-            fee = self._percent(amount, config["fee_percentage"])
+            fx_markup = (
+                0.0 if same_currency
+                else self._percent(base_inr, config["fx_markup_percentage"])
+            )
+            processing_fee = self._percent(base_inr, config["processing_fee_percentage"])
+            other_charges = self._percent(base_inr, config["other_charges_percentage"])
+            fee = round(fx_markup + processing_fee + other_charges, 2)
             method_summaries.append(
                 {
                     "name": name,
                     "estimated_fee": fee,
-                    "estimated_total": round(amount + fee, 2),
+                    "estimated_total": round(base_inr + fee, 2),
+                    "fx_markup": fx_markup,
+                    "processing_fee": processing_fee,
+                    "other_charges": other_charges,
                     "config": config,
                 }
             )
@@ -165,14 +230,13 @@ class PaymentAnalyzer:
         )
 
         # --- Detailed cost breakdown for the recommended method -----------
-        best_config: dict[str, float] = best["config"]  # type: ignore[assignment]
-        fx_markup = self._percent(amount, best_config["fx_markup_percentage"])
-        processing_fee = self._percent(amount, best_config["processing_fee_percentage"])
-        other_charges = self._percent(amount, best_config["other_charges_percentage"])
+        fx_markup = best["fx_markup"]  # type: ignore[assignment]
+        processing_fee = best["processing_fee"]  # type: ignore[assignment]
+        other_charges = best["other_charges"]  # type: ignore[assignment]
 
         # Guard against rounding drift — make the sum exact.
-        total_fees = round(fx_markup + processing_fee + other_charges, 2)
-        total_cost = round(amount + total_fees, 2)
+        total_fees = round(fx_markup + processing_fee + other_charges, 2)  # type: ignore[operator]
+        total_cost = round(base_inr + total_fees, 2)
 
         # --- Recipient amount (full source amount is converted) -----------
         recipient_amount = round(amount * exchange_rate, 2)
@@ -217,5 +281,7 @@ class PaymentAnalyzer:
                     f"among the configured payment methods."
                 ),
             ),
+            amount_in_inr=base_inr,
+            total_cost_in_inr=total_cost,
             disclaimer=DISCLAIMER,
         )

@@ -15,6 +15,10 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = ""
 
+    # JWT auth settings. JWT_SECRET should be overridden in .env for production.
+    JWT_SECRET: str = "currencyx-dev-secret-change-me"
+    JWT_ALGORITHM: str = "HS256"
+
     # Razorpay TEST MODE credentials. Loaded from .env — never hard-coded.
     RAZORPAY_KEY_ID: str = ""
     RAZORPAY_KEY_SECRET: str = ""

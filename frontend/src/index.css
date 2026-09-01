@@ -498,3 +498,70 @@ a { text-decoration: none; color: inherit; }
   color: var(--text-dim, #8aa0b5);
 }
 .detail-section-title:first-child { margin-top: 0; }
+
+/* ---- Dark-theme select dropdowns (fixes unreadable native options) ---- */
+select,
+.filter-select select,
+.payment-form select,
+input,
+.input-wrap {
+  color: var(--text, #eaf3f0);
+}
+
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: var(--card2);
+  color: var(--text, #eaf3f0);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border-radius: 10px;
+  padding: 10px 34px 10px 12px;
+  font: inherit;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2390b8ac' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+select:hover {
+  border-color: var(--accent);
+}
+
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--soft);
+}
+
+/* Native dropdown list (Windows Chrome / Chromium) */
+select option,
+select optgroup {
+  background-color: #0d1b2a;
+  color: #eaf3f0;
+}
+
+/* Invalid state keeps the existing .invalid styling working */
+select.invalid {
+  border-color: #ff6b6b;
+}
+
+/* Windows high-contrast / forced-colors fallback */
+@media (forced-colors: active) {
+  select {
+    appearance: auto;
+    background-image: none;
+  }
+}
+
+/* ---- Payment method detail panels (UPI / Bank Transfer / Cards) ---- */
+.method-details {
+  margin: 1rem 1.25rem 1.25rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(75, 227, 185, 0.2);
+  border-radius: 12px;
+  background: rgba(75, 227, 185, 0.05);
+}
+.method-details h4 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+}

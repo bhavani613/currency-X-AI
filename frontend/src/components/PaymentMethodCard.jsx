@@ -11,8 +11,9 @@ import {
 const ICONS = {
   SMART: Zap,
   BANK_TRANSFER: Landmark,
+  UPI: Smartphone,
   DEBIT_CARD: CreditCard,
-  CREDIT_CARD: Smartphone,
+  CREDIT_CARD: CreditCard,
 };
 
 export default function PaymentMethodCard({ method, selected, onSelect, showSelect = true }) {
@@ -54,6 +55,10 @@ export default function PaymentMethodCard({ method, selected, onSelect, showSele
         <div>
           <span>Total fees</span>
           <strong>₹{method.totalFees?.toLocaleString("en-IN") ?? "—"}</strong>
+        </div>
+        <div>
+          <span>Total cost</span>
+          <strong>₹{method.totalCost?.toLocaleString("en-IN") ?? "—"}</strong>
         </div>
         <div>
           <span>Markup</span>

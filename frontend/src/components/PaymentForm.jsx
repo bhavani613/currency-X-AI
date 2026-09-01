@@ -1,13 +1,20 @@
 import { ArrowDown, Zap } from "lucide-react";
 import { COUNTRIES, PURPOSES } from "../services/mockData";
+import {
+  CURRENCIES,
+  DEFAULT_SOURCE_CURRENCY,
+  currencySymbol,
+} from "../services/currencies";
 
 export default function PaymentForm({ form, onChange, onSubmit, submitting }) {
+  const sourceSymbol = currencySymbol(form.sourceCurrency || DEFAULT_SOURCE_CURRENCY);
+
   return (
     <form className="payment-form" onSubmit={onSubmit}>
       <div className="field">
         <label htmlFor="pf-amount">Amount you send</label>
         <div className="input-wrap">
-          <span className="input-prefix">₹</span>
+          <span className="input-prefix">{sourceSymbol}</span>
           <input
             id="pf-amount"
             type="number"
@@ -17,7 +24,38 @@ export default function PaymentForm({ form, onChange, onSubmit, submitting }) {
             placeholder="100000"
             aria-label="Amount"
           />
-          <span className="input-suffix">INR</span>
+          <span className="input-suffix">{form.sourceCurrency || DEFAULT_SOURCE_CURRENCY}</span>
+        </div>
+      </div>
+
+      <div className="field two-col">
+        <div>
+          <label htmlFor="pf-source">Source currency</label>
+          <select
+            id="pf-source"
+            value={form.sourceCurrency || DEFAULT_SOURCE_CURRENCY}
+            onChange={(e) => onChange({ ...form, sourceCurrency: e.target.value })}
+          >
+            {CURRENCIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.code} — {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="pf-purpose-2">Purpose</label>
+          <select
+            id="pf-purpose-2"
+            value={form.purpose}
+            onChange={(e) => onChange({ ...form, purpose: e.target.value })}
+          >
+            {PURPOSES.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -62,21 +100,6 @@ export default function PaymentForm({ form, onChange, onSubmit, submitting }) {
             ))}
           </select>
         </div>
-      </div>
-
-      <div className="field">
-        <label htmlFor="pf-purpose">Purpose</label>
-        <select
-          id="pf-purpose"
-          value={form.purpose}
-          onChange={(e) => onChange({ ...form, purpose: e.target.value })}
-        >
-          {PURPOSES.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
       </div>
 
       <button className="btn btn-primary btn-block" disabled={submitting}>

@@ -1,20 +1,25 @@
 // ============================================================
 // CurrencyX AI — Auth Context
 // ------------------------------------------------------------
-// Mock authentication using localStorage only. Designed so it
-// can be swapped for the FastAPI backend (see services/api.js)
-// without touching the consuming components.
+// Real authentication backed by the FastAPI + PostgreSQL backend
+// (POST /auth/signup, POST /auth/login). localStorage is used ONLY
+// to persist the frontend session state (user profile + JWT) —
+// the actual accounts live in PostgreSQL with bcrypt password
+// hashes. Passwords are never stored client-side.
 //
 // localStorage keys:
-//   currencyx_user  — serialized user profile (kept after logout)
-//   currencyx_auth  — "1" flag marking the user as authenticated
+//   currencyx_user   — serialized user profile (session state)
+//   currencyx_auth   — "1" flag marking the user as authenticated
+//   currencyx_token  — JWT access token from the backend
 // ============================================================
 
 import { createContext, useContext, useState, useEffect } from "react";
+import { loginUser, signupUser } from "../services/api";
 
 const AuthContext = createContext(null);
 const USER_KEY = "currencyx_user";
 const AUTH_KEY = "currencyx_auth";
+const TOKEN_KEY = "currencyx_token";
 
 function readJSON(key) {
   try {
@@ -25,34 +30,58 @@ function readJSON(key) {
   }
 }
 
+/** Normalize the backend user payload for the UI. */
+function toProfile(apiUser) {
+  return {
+    id: apiUser.id,
+    name: apiUser.full_name,
+    email: apiUser.email,
+  };
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore session on refresh using the persisted auth flag.
+  // Restore session on refresh using the persisted auth state.
+  // NOTE: this restores the *session*, not the account — accounts
+  // persist in PostgreSQL and are re-verified on every login.
   useEffect(() => {
     const authFlag = localStorage.getItem(AUTH_KEY);
     if (authFlag === "1") {
-      const stored = readJSON(USER_KEY);
-      setUser(stored);
+      setUser(readJSON(USER_KEY));
     }
     setLoading(false);
   }, []);
 
-  const commit = (data) => {
-    localStorage.setItem(USER_KEY, JSON.stringify(data));
+  const commit = (profile, token) => {
+    localStorage.setItem(USER_KEY, JSON.stringify(profile));
     localStorage.setItem(AUTH_KEY, "1");
-    setUser(data);
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    setUser(profile);
   };
 
-  const login = (data, _remember) => {
-    commit(data);
-    return data;
+  /**
+   * login — verifies credentials against PostgreSQL via the backend.
+   * Throws the backend's error message (e.g. "Invalid email or password.")
+   * so pages can display it directly.
+   */
+  const login = async ({ email, password }) => {
+    const data = await loginUser({ email, password });
+    const profile = toProfile(data.user);
+    commit(profile, data.access_token);
+    return profile;
   };
 
-  const signup = (data) => {
-    commit(data);
-    return data;
+  /**
+   * signup — creates the account in PostgreSQL via the backend.
+   * Throws with the backend message on duplicate email/validation errors.
+   */
+  const signup = async ({ fullName, email, password }) => {
+    const data = await signupUser({ fullName, email, password });
+    const profile = toProfile(data.user);
+    commit(profile, data.access_token);
+    return profile;
   };
 
   const updateUser = (patch) => {
@@ -64,10 +93,8 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    // Clear the auth flag so refresh keeps the user signed out.
-    // The saved profile (currencyx_user) is intentionally kept so a
-    // returning user can sign in again with their stored details.
     localStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem(TOKEN_KEY);
     setUser(null);
   };
 

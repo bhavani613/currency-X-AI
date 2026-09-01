@@ -4,7 +4,7 @@ import { BarChart3, Eye, EyeOff, Mail, Lock, User, Check } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 export default function Signup() {
-  const { signup, getStoredUser, isAuthenticated, loading: authLoading } = useAuth();
+  const { signup, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
@@ -39,23 +39,22 @@ export default function Signup() {
     return e;
   };
 
-  const handleSubmit = (ev) => {
+  const handleSubmit = async (ev) => {
     ev.preventDefault();
     const e = validate();
     setErrors(e);
     setError("");
     if (Object.keys(e).length) return;
     setLoading(true);
-    // Mock signup — save the profile to localStorage.
-    setTimeout(() => {
-      if (getStoredUser(form.email)) {
-        setError("An account with this email already exists. Please login.");
-        setLoading(false);
-        return;
-      }
-      signup({ name: form.fullName, email: form.email, password: form.password });
+    try {
+      // Real signup — the account is created in PostgreSQL with a bcrypt
+      // password hash. The user is logged in immediately on success.
+      await signup({ fullName: form.fullName.trim(), email: form.email.trim(), password: form.password });
       navigate("/dashboard", { replace: true });
-    }, 800);
+    } catch (err) {
+      setError(err.message || "Signup failed. Please try again.");
+      setLoading(false);
+    }
   };
 
   const passwordHints =

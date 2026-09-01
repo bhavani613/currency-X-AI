@@ -100,6 +100,10 @@ class PaymentAnalysisResponse(BaseModel):
     recipient: RecipientInfo
     payment_methods: list[PaymentMethodComparison]
     recommendation: Recommendation
+    #: Prototype convenience fields: the source amount and the recommended
+    #: total cost expressed in INR (Razorpay checkout settles in INR).
+    amount_in_inr: float | None = None
+    total_cost_in_inr: float | None = None
     disclaimer: str
 
 

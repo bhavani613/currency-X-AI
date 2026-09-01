@@ -15,6 +15,8 @@ export const COUNTRIES = [
   { country: "Germany", currency: "EUR", symbol: "€" },
   { country: "France", currency: "EUR", symbol: "€" },
   { country: "Japan", currency: "JPY", symbol: "¥" },
+  { country: "Switzerland", currency: "CHF", symbol: "Fr" },
+  { country: "New Zealand", currency: "NZD", symbol: "NZ$" },
 ];
 
 export const PURPOSES = [

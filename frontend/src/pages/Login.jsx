@@ -4,7 +4,7 @@ import { BarChart3, Eye, EyeOff, Mail, Lock } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
-  const { login, getStoredUser, isAuthenticated, loading: authLoading } = useAuth();
+  const { login: authLogin, signup, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/dashboard";
@@ -31,34 +31,24 @@ export default function Login() {
     return e;
   };
 
-  const handleSubmit = (ev) => {
+  const handleSubmit = async (ev) => {
     ev.preventDefault();
     const e = validate();
     setErrors(e);
     setError("");
     if (Object.keys(e).length) return;
     setLoading(true);
-    // Mock login — validate against the stored profile (localStorage).
-    setTimeout(() => {
-      const stored = getStoredUser(form.email);
-      if (!stored) {
-        setError("No account found. Please sign up first.");
-        setLoading(false);
-        return;
-      }
-      if (stored.password && stored.password !== form.password) {
-        setError("Incorrect password. Please try again.");
-        setLoading(false);
-        return;
-      }
-      login(stored, form.remember);
+    try {
+      await authLogin({ email: form.email.trim(), password: form.password });
       navigate(from, { replace: true });
-    }, 700);
+    } catch (err) {
+      setError(err.message || "Login failed. Please try again.");
+      setLoading(false);
+    }
   };
 
   const handleGoogle = () => {
-    login({ email: "demo@currencyx.app", name: "Demo User" });
-    navigate(from, { replace: true });
+    setError("Google sign-in is not available yet. Please use email and password.");
   };
 
   return (

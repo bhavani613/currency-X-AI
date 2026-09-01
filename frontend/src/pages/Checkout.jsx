@@ -6,6 +6,7 @@ import Footer from "../components/Footer";
 import PaymentMethodCard from "../components/PaymentMethodCard";
 import { createPaymentOrder, verifyPayment } from "../services/api";
 import { saveTransaction } from "../services/transactionService";
+import { currencySymbol } from "../services/currencies";
 
 /** Load Razorpay Checkout.js once; resolves with window.Razorpay. */
 function loadRazorpayScript() {
@@ -34,7 +35,9 @@ export default function Checkout() {
   const requested = result?.requested || {};
   const summary = result?.fees || {};
 
-  const [chosen, setChosen] = useState(state.methodId || result?.recommendation || "");
+  const [chosen, setChosen] = useState(
+    state.selectedPaymentMethod?.id || state.methodId || result?.recommendation || ""
+  );
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState("");
 
@@ -42,6 +45,13 @@ export default function Checkout() {
     result?.methods?.find((m) => m.id === chosen) || result?.methods?.[0];
 
   const total = Number(summary.totalCost || requested.amount);
+  const srcCurrency = requested.sourceCurrency || "INR";
+  const isSourceInr = srcCurrency === "INR";
+  // Razorpay checkout settles in INR only. For non-INR analyses we use the
+  // backend's explicit INR equivalent of the total cost — never silently
+  // treating a foreign-currency amount as INR.
+  const payInr = Number(result?.totalCostInInr ?? total);
+  const srcSymbol = currencySymbol(srcCurrency);
 
   const proceed = async () => {
     if (!result) {
@@ -55,7 +65,7 @@ export default function Checkout() {
     try {
       // 1. Create the Razorpay order on the backend (TEST MODE)
       const order = await createPaymentOrder({
-        amount: total,
+        amount: payInr, // always INR payable amount
         currency: "INR",
         receipt: `currencyx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       });
@@ -94,7 +104,7 @@ export default function Checkout() {
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_order_id: response.razorpay_order_id,
               amount: total,
-              currency: "INR",
+              currency: srcCurrency,
               destination_country: requested.destinationCountry,
               destination_currency: requested.destinationCurrency,
               recipient_amount: result.recipientAmount,
@@ -109,7 +119,7 @@ export default function Checkout() {
               JSON.stringify({
                 paymentId: response.razorpay_payment_id,
                 orderId: response.razorpay_order_id,
-                amount: total,
+                amount: payInr,
                 currency: "INR",
                 method: activeMethod?.label || result.recommendation,
                 timestamp: new Date().toISOString(),
@@ -165,8 +175,26 @@ export default function Checkout() {
                 <div><span>Amount</span><strong>₹{requested.amount?.toLocaleString("en-IN")} INR</strong></div>
                 <div><span>Destination</span><strong>{requested.destinationCountry}</strong></div>
                 <div><span>Recipient gets</span><strong>{result.recipientCurrency || requested.destinationCurrency} {result.recipientAmount?.toLocaleString?.() ?? result.recipientAmount}</strong></div>
-                <div><span>Exchange rate</span><strong>{requested.rate}</strong></div>
+                <div><span>Exchange rate</span><strong>{requested.rate} {requested.destinationCurrency} per {srcCurrency}</strong></div>
                 <div><span>Total fees</span><strong>₹{summary.totalFees?.toLocaleString("en-IN")}</strong></div>
+                {!isSourceInr && (
+                  <div>
+                    <span>Payable in INR (Razorpay)</span>
+                    <strong>{"\u20B9"}{payInr.toLocaleString("en-IN")} INR</strong>
+                  </div>
+                )}
+                {state.recipientUpiId && (
+                  <div>
+                    <span>Recipient UPI ID</span>
+                    <strong>{state.recipientUpiId}</strong>
+                  </div>
+                )}
+                {state.selectedPaymentMethod && (
+                  <div>
+                    <span>Payment method</span>
+                    <strong>{state.selectedPaymentMethod.label}</strong>
+                  </div>
+                )}
               </div>
               <div className="summary-total">
                 <span>Total</span>

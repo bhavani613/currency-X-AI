@@ -48,14 +48,25 @@ async def get_session() -> AsyncSession | None:
 
 
 async def init_db() -> None:
-    """Create all tables defined on :data:`Base.metadata` if they don't exist."""
+    """Create all tables defined on :data:`Base.metadata` if they don't exist.
+
+    A database outage must never prevent the API from starting —
+    failures are logged and the API continues in degraded mode.
+    """
     from app.database.base import Base  # local import avoids circular deps
-    from app.models import PaymentAnalysis, PaymentMethodComparison  # noqa: F401
+    from app.models import (  # noqa: F401
+        PaymentAnalysis,
+        PaymentMethodComparison,
+        User,
+    )
 
     if engine is None:
         logger.warning("Skipping table creation — DATABASE_URL not configured.")
         return
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables created/verified successfully.")
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables created/verified successfully.")
+    except Exception as exc:  # noqa: BLE001 — any DB failure is non-fatal
+        logger.error("Database initialization failed — running degraded: %s", exc)

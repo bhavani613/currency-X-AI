@@ -8,9 +8,11 @@ import CostBreakdown from "../components/CostBreakdown";
 import PaymentMethodCard from "../components/PaymentMethodCard";
 import Loading from "../components/Loading";
 import { analyzePayment } from "../services/api";
+import { DEFAULT_SOURCE_CURRENCY } from "../services/currencies";
 
 const DEFAULT_FORM = {
   amount: "100000",
+  sourceCurrency: DEFAULT_SOURCE_CURRENCY,
   destinationCountry: "United Kingdom",
   destinationCurrency: "GBP",
   purpose: "Education",
@@ -24,6 +26,18 @@ export default function AnalyzePayment() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
+  const [recipientUpiId, setRecipientUpiId] = useState("");
+  const [upiError, setUpiError] = useState("");
+  const [bankDetails, setBankDetails] = useState({
+    recipientName: "",
+    accountNumber: "",
+    ifscSwift: "",
+    bankName: "",
+  });
+
+  const chosenMethod =
+    result?.methods?.find((m) => m.id === selectedPaymentMethod) || null;
 
   const runAnalysis = async (formData = form) => {
     if (loading) return; // prevent duplicate requests
@@ -44,6 +58,15 @@ export default function AnalyzePayment() {
     try {
       const res = await analyzePayment({ ...formData, amount });
       setResult(res);
+      // Default selection: the backend's recommended method.
+      setSelectedPaymentMethod(
+        res.methods.find((m) => m.isCheapest || m.recommended)?.id ||
+          res.methods[0]?.id ||
+          null
+      );
+      setRecipientUpiId("");
+      setUpiError("");
+      setBankDetails({ recipientName: "", accountNumber: "", ifscSwift: "", bankName: "" });
       // Persist the (non-sensitive) analysis input so the AI Advisor page
       // can prefill and reuse it without a duplicate API call.
       sessionStorage.setItem(
@@ -119,8 +142,8 @@ export default function AnalyzePayment() {
 
                 <section className="card">
                   <div className="card-head">
-                    <h3>Payment method comparison</h3>
-                    <span className="caption">Lowest cost highlighted</span>
+                    <h3>Payment Methods</h3>
+                    <span className="caption">Select how you'd like to pay</span>
                   </div>
                   <div className="methods-list">
                     {result.methods.map((m) => (
@@ -131,14 +154,87 @@ export default function AnalyzePayment() {
                           symbol: m.symbol || "",
                           isCheapest: !!(m.isCheapest || m.recommended),
                         }}
-                        showSelect={false}
+                        selected={selectedPaymentMethod === m.id}
+                        onSelect={setSelectedPaymentMethod}
                       />
                     ))}
                   </div>
-                  <div className="ai-explanation">
-                    <Sparkles size={16} />
-                    <p>{result.explanation}</p>
-                  </div>
+
+                  {chosenMethod?.id === "UPI" && (
+                    <div className="method-details">
+                      <h4>UPI Details</h4>
+                      <div className="field">
+                        <label htmlFor="upi-id">Recipient UPI ID</label>
+                        <input
+                          id="upi-id"
+                          type="text"
+                          placeholder="recipient@upi"
+                          value={recipientUpiId}
+                          onChange={(e) => {
+                            setRecipientUpiId(e.target.value);
+                            setUpiError("");
+                          }}
+                        />
+                        {upiError && <p className="caption" style={{ color: "#ff8f8f" }}>{upiError}</p>}
+                      </div>
+                      <p className="caption">
+                        The payment itself is completed securely through Razorpay checkout — entering
+                        a UPI ID here only records the recipient's UPI address.
+                      </p>
+                    </div>
+                  )}
+
+                  {chosenMethod?.id === "BANK_TRANSFER" && (
+                    <div className="method-details">
+                      <h4>Bank Transfer Details</h4>
+                      <div className="field two-col">
+                        <div>
+                          <label htmlFor="bt-name">Recipient name</label>
+                          <input id="bt-name" type="text" value={bankDetails.recipientName}
+                            onChange={(e) => setBankDetails({ ...bankDetails, recipientName: e.target.value })} />
+                        </div>
+                        <div>
+                          <label htmlFor="bt-account">Bank account number</label>
+                          <input id="bt-account" type="text" value={bankDetails.accountNumber}
+                            onChange={(e) => setBankDetails({ ...bankDetails, accountNumber: e.target.value })} />
+                        </div>
+                      </div>
+                      <div className="field two-col">
+                        <div>
+                          <label htmlFor="bt-ifsc">IFSC / SWIFT code</label>
+                          <input id="bt-ifsc" type="text" value={bankDetails.ifscSwift}
+                            onChange={(e) => setBankDetails({ ...bankDetails, ifscSwift: e.target.value })} />
+                        </div>
+                        <div>
+                          <label htmlFor="bt-bank">Bank name</label>
+                          <input id="bt-bank" type="text" value={bankDetails.bankName}
+                            onChange={(e) => setBankDetails({ ...bankDetails, bankName: e.target.value })} />
+                        </div>
+                      </div>
+                      <p className="caption">
+                        These are recipient details for your records only. The actual payment is
+                        completed securely through the Razorpay checkout — we never store bank
+                        credentials.
+                      </p>
+                    </div>
+                  )}
+
+                  {(chosenMethod?.id === "DEBIT_CARD" || chosenMethod?.id === "CREDIT_CARD") && (
+                    <div className="method-details">
+                      <h4>{chosenMethod.label}</h4>
+                      <p className="caption">
+                        Your card details will be entered securely in Razorpay Checkout.
+                      </p>
+                    </div>
+                  )}
+
+                  {chosenMethod?.id === "SMART" && result.explanation && (
+                    <div className="ai-explanation">
+                      <Sparkles size={16} />
+                      <p>{result.explanation}</p>
+                    </div>
+                  )}
+
                   {result.disclaimer && (
                     <p className="caption" style={{ padding: "0 1.25rem 1.25rem" }}>
                       {result.disclaimer}
@@ -149,9 +245,40 @@ export default function AnalyzePayment() {
                 <div className="analyze-actions">
                   <button
                     className="btn btn-primary"
-                    onClick={() => navigate("/checkout", { state: { form, result } })}
+                    disabled={!selectedPaymentMethod}
+                    onClick={() => {
+                      if (chosenMethod?.id === "UPI") {
+                        const upi = recipientUpiId.trim();
+                        if (!upi) {
+                          setUpiError("Recipient UPI ID is required.");
+                          return;
+                        }
+                        if (!/^[\w.\-]{2,}@[a-zA-Z]{2,}$/.test(upi)) {
+                          setUpiError("Enter a valid UPI ID in the format username@provider.");
+                          return;
+                        }
+                      }
+                      navigate("/checkout", {
+                        state: {
+                          form,
+                          result,
+                          selectedPaymentMethod: chosenMethod,
+                          recipientUpiId:
+                            chosenMethod?.id === "UPI" ? recipientUpiId.trim() : undefined,
+                          bankDetails:
+                            chosenMethod?.id === "BANK_TRANSFER"
+                              ? {
+                                  recipientName: bankDetails.recipientName.trim(),
+                                  accountNumber: bankDetails.accountNumber.trim(),
+                                  ifscSwift: bankDetails.ifscSwift.trim(),
+                                  bankName: bankDetails.bankName.trim(),
+                                }
+                              : undefined,
+                        },
+                      });
+                    }}
                   >
-                    Proceed to Checkout <ArrowUpRight size={16} />
+                    Proceed to Payment <ArrowUpRight size={16} />
                   </button>
                   <button
                     className="btn btn-ghost"

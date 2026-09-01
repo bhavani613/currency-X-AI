@@ -6,5 +6,6 @@ can discover them during startup.
 """
 
 from app.models.payment import PaymentAnalysis, PaymentMethodComparison
+from app.models.user import User
 
-__all__ = ["PaymentAnalysis", "PaymentMethodComparison"]
+__all__ = ["PaymentAnalysis", "PaymentMethodComparison", "User"]
