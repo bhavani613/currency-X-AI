@@ -7,6 +7,7 @@ can discover them during startup.
 
 from app.models.password_reset import PasswordResetToken
 from app.models.payment import PaymentAnalysis, PaymentMethodComparison
+from app.models.payment_order import PaymentOrder
 from app.models.revenue_recovery import PaymentAttempt, RecoveryRecommendation
 from app.models.user import User
 
@@ -14,6 +15,7 @@ __all__ = [
     "PasswordResetToken",
     "PaymentAnalysis",
     "PaymentMethodComparison",
+    "PaymentOrder",
     "PaymentAttempt",
     "RecoveryRecommendation",
     "User",

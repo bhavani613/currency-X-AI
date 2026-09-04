@@ -72,13 +72,29 @@ async def test_demo_create_order_no_real_razorpay_call(client):
 
 @pytest.mark.asyncio
 async def test_demo_payment_verification_succeeds(client):
-    """Demo payment verification should accept demo_payment_* IDs."""
+    """Demo payment verification should accept demo_payment_* IDs for orders created by this backend."""
     token = await register_and_login(client)
+    
+    # First create a demo order
+    create_resp = await client.post(
+        "/api/v1/payments/create-order",
+        json={
+            "amount": 500,
+            "currency": "INR",
+            "receipt": f"test_receipt_{uuid.uuid4().hex[:8]}",
+            "payment_method": "UPI",
+        },
+        headers=auth_headers(token),
+    )
+    assert create_resp.status_code == 200
+    order_id = create_resp.json()["order_id"]
+    
+    # Now verify the payment for that order
     resp = await client.post(
         "/api/v1/payments/verify",
         json={
             "razorpay_payment_id": "demo_payment_abc123",
-            "razorpay_order_id": "demo_order_xyz789",
+            "razorpay_order_id": order_id,
             "razorpay_signature": "any_signature_value",
         },
         headers=auth_headers(token),
@@ -87,6 +103,22 @@ async def test_demo_payment_verification_succeeds(client):
     data = resp.json()
     assert data["success"] is True
     assert data["demo"] is True
+
+
+@pytest.mark.asyncio
+async def test_demo_payment_verification_rejects_unknown_order(client):
+    """Demo payment verification should reject arbitrary fake demo_order_* IDs."""
+    token = await register_and_login(client)
+    resp = await client.post(
+        "/api/v1/payments/verify",
+        json={
+            "razorpay_payment_id": "demo_payment_abc123",
+            "razorpay_order_id": "demo_order_fake_order_not_created_by_backend",
+            "razorpay_signature": "any_signature_value",
+        },
+        headers=auth_headers(token),
+    )
+    assert resp.status_code == 400
 
 
 @pytest.mark.asyncio

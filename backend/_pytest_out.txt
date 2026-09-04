@@ -1,9 +1,0 @@
-ImportError while loading conftest 'C:\Users\USER\Desktop\currency-X-AI\backend\tests\conftest.py'.
-tests\conftest.py:20: in <module>
-    from main import app
-main.py:9: in <module>
-    from app.api.razorpay_pay import router as razorpay_router
-E     File "C:\Users\USER\Desktop\currency-X-AI\backend\app\api\razorpay_pay.py", line 27
-E       router = APIRouter(,
-E                          ^
-E   SyntaxError: invalid syntax

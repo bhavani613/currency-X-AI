@@ -41,9 +41,10 @@ class PaymentRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def save(self, response: PaymentAnalysisResponse) -> PaymentAnalysis:
+    async def save(self, response: PaymentAnalysisResponse, user_id: str | None = None) -> PaymentAnalysis:
         """Persist a PaymentAnalysisResponse and return the saved model."""
         db = PaymentAnalysis(
+            user_id=user_id,
             amount=_to_decimal(response.payment.amount),
             source_currency=response.payment.source_currency,
             destination_country=response.payment.destination_country,
@@ -76,23 +77,35 @@ class PaymentRepository:
 
     # -- Read ---------------------------------------------------------------
 
-    async def get_by_id(self, payment_id: UUID) -> PaymentAnalysis | None:
-        """Retrieve a single analysis by ID, including its payment methods."""
+    async def get_by_id(self, payment_id: UUID, user_id: str | None = None) -> PaymentAnalysis | None:
+        """Retrieve a single analysis by ID, including its payment methods.
+        
+        When user_id is provided, only returns the analysis if it belongs to that user.
+        """
         result = await self._session.execute(
             select(PaymentAnalysis)
             .where(PaymentAnalysis.id == payment_id)
             .options(selectinload(PaymentAnalysis.payment_methods))
         )
-        return result.scalar_one_or_none()
+        record = result.scalar_one_or_none()
+        if record is not None and user_id is not None and record.user_id != user_id:
+            return None  # belongs to another user
+        return record
 
-    async def get_recent(self, limit: int = 10) -> list[PaymentAnalysis]:
-        """Retrieve the most recent analyses ordered by creation date."""
-        result = await self._session.execute(
+    async def get_recent(self, limit: int = 10, user_id: str | None = None) -> list[PaymentAnalysis]:
+        """Retrieve the most recent analyses ordered by creation date.
+        
+        When user_id is provided, only returns analyses belonging to that user.
+        """
+        query = (
             select(PaymentAnalysis)
             .order_by(PaymentAnalysis.created_at.desc())
             .limit(limit)
             .options(selectinload(PaymentAnalysis.payment_methods))
         )
+        if user_id is not None:
+            query = query.where(PaymentAnalysis.user_id == user_id)
+        result = await self._session.execute(query)
         return list(result.scalars().all())
 
     # -- Serialization -------------------------------------------------------

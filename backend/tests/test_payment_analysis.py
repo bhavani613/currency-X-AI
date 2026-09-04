@@ -6,6 +6,8 @@ No real payment providers are called.
 
 import pytest
 
+from tests.helpers import register_and_login
+
 
 def _valid_payload(**overrides):
     """Return a valid payment analysis request payload with optional overrides."""
@@ -21,10 +23,11 @@ def _valid_payload(**overrides):
 
 
 @pytest.mark.asyncio
-async def test_valid_payment_analysis_succeeds(client):
+async def test_valid_payment_analysis_succeeds(client, auth_headers):
     """A valid payment analysis request should return 200 with analysis."""
     resp = await client.post(
         "/api/v1/payments/analyze",
+        headers=auth_headers,
         json=_valid_payload(),
     )
     assert resp.status_code == 200
@@ -38,40 +41,54 @@ async def test_valid_payment_analysis_succeeds(client):
 
 
 @pytest.mark.asyncio
-async def test_invalid_currency_rejected(client):
+async def test_analyze_requires_auth(client):
+    """POST /payments/analyze without a token → 401."""
+    resp = await client.post(
+        "/api/v1/payments/analyze",
+        json=_valid_payload(),
+    )
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_invalid_currency_rejected(client, auth_headers):
     """An invalid source currency code should be rejected with 422."""
     resp = await client.post(
         "/api/v1/payments/analyze",
+        headers=auth_headers,
         json=_valid_payload(source_currency="XX"),
     )
     assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_negative_amount_rejected(client):
+async def test_negative_amount_rejected(client, auth_headers):
     """A negative amount should be rejected."""
     resp = await client.post(
         "/api/v1/payments/analyze",
+        headers=auth_headers,
         json=_valid_payload(amount=-100),
     )
     assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_zero_amount_rejected(client):
+async def test_zero_amount_rejected(client, auth_headers):
     """A zero amount should be rejected."""
     resp = await client.post(
         "/api/v1/payments/analyze",
+        headers=auth_headers,
         json=_valid_payload(amount=0),
     )
     assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_payment_recommendation_returned(client):
+async def test_payment_recommendation_returned(client, auth_headers):
     """The response should include a valid recommendation with savings."""
     resp = await client.post(
         "/api/v1/payments/analyze",
+        headers=auth_headers,
         json=_valid_payload(),
     )
     assert resp.status_code == 200
@@ -84,10 +101,11 @@ async def test_payment_recommendation_returned(client):
 
 
 @pytest.mark.asyncio
-async def test_calculation_output_valid(client):
+async def test_calculation_output_valid(client, auth_headers):
     """Verify key calculation fields are present and valid."""
     resp = await client.post(
         "/api/v1/payments/analyze",
+        headers=auth_headers,
         json=_valid_payload(),
     )
     assert resp.status_code == 200
@@ -107,3 +125,75 @@ async def test_calculation_output_valid(client):
 
     # Exchange rate must be a positive number
     assert data["exchange_rate"] > 0
+
+
+@pytest.mark.asyncio
+async def test_history_requires_auth(client):
+    """GET /payments/history without a token → 401."""
+    resp = await client.get("/api/v1/payments/history")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_history_returns_only_own_analyses(client):
+    """Users should only see their own analyses in history."""
+    # Create two users
+    token1 = await register_and_login(client, email="user1_history@example.com")
+    token2 = await register_and_login(client, email="user2_history@example.com")
+
+    # User 1 creates an analysis
+    resp = await client.post(
+        "/api/v1/payments/analyze",
+        headers={"Authorization": f"Bearer {token1}"},
+        json=_valid_payload(amount=5000),
+    )
+    assert resp.status_code == 200
+
+    # User 2 creates an analysis
+    resp = await client.post(
+        "/api/v1/payments/analyze",
+        headers={"Authorization": f"Bearer {token2}"},
+        json=_valid_payload(amount=10000),
+    )
+    assert resp.status_code == 200
+
+    # User 1's history should only show their own analysis
+    resp = await client.get(
+        "/api/v1/payments/history",
+        headers={"Authorization": f"Bearer {token1}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["amount"] == 5000
+
+
+@pytest.mark.asyncio
+async def test_detail_requires_auth(client):
+    """GET /payments/{id} without a token → 401."""
+    resp = await client.get("/api/v1/payments/some-random-id")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_detail_cross_user_forbidden(client):
+    """A user should not be able to access another user's analysis."""
+    # Create two users
+    token1 = await register_and_login(client, email="user1_detail@example.com")
+    token2 = await register_and_login(client, email="user2_detail@example.com")
+
+    # User 1 creates an analysis
+    resp = await client.post(
+        "/api/v1/payments/analyze",
+        headers={"Authorization": f"Bearer {token1}"},
+        json=_valid_payload(),
+    )
+    assert resp.status_code == 200
+    analysis_id = resp.json()["id"]
+
+    # User 2 tries to access User 1's analysis → 404
+    resp = await client.get(
+        f"/api/v1/payments/{analysis_id}",
+        headers={"Authorization": f"Bearer {token2}"},
+    )
+    assert resp.status_code == 404

@@ -161,12 +161,6 @@ export default function Home() {
               >
                 Calculate Payment <ArrowUpRight size={17} />
               </Link>
-              <Link
-                to={isAuthenticated ? "/advisor" : "/signup"}
-                className="btn btn-secondary"
-              >
-                Try AI Advisor
-              </Link>
             </div>
             <div className="stats">
               <div>

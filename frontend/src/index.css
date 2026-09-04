@@ -169,7 +169,7 @@ a { text-decoration: none; color: inherit; }
 .cta-check span { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ========= Footer ========= */
-.footer { border-top: 1px solid var(--border); background: var(--bg-alt); padding: 60px 0 0; }
+.footer { border-top: 1px solid var(--border); background: var(--bg-alt); padding: 48px 0 0; }
 .footer-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 40px; padding-bottom: 40px; }
 .footer-logo { display: flex; align-items: center; gap: 8px; font-family: var(--head); font-size: 18px; font-weight: 700; }
 .footer-logo span span { color: var(--accent); }
@@ -203,8 +203,9 @@ a { text-decoration: none; color: inherit; }
 .field { display: flex; flex-direction: column; gap: 7px; }
 .field label { font-size: 13px; color: var(--muted); font-weight: 500; }
 .input-wrap { position: relative; display: flex; align-items: center; }
-.input-wrap input, .input-wrap select, .field > input, .field > select { width: 100%; background: var(--card2); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); padding: 13px 15px; outline: none; transition: border-color .2s; }
-.input-wrap input:focus, .field>input:focus, .field>select:focus, .input-wrap select:focus { border-color: var(--accent); }
+.input-wrap input, .input-wrap select, .field > input, .field > select { width: 100%; background: var(--card2); border: 1.5px solid var(--border); color: var(--text); border-radius: var(--radius-sm); padding: 13px 15px; outline: none; transition: border-color .2s, box-shadow .2s; }
+.input-wrap input:hover, .input-wrap select:hover, .field > input:hover, .field > select:hover { border-color: var(--muted2); }
+.input-wrap input:focus, .field>input:focus, .field>select:focus, .input-wrap select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(75, 227, 185, .12); }
 .field-icon { position: absolute; left: 14px; color: var(--muted2); }
 .input-wrap.with-icon input { padding-left: 42px; }
 .password-toggle { position: absolute; right: 12px; background: none; border: none; color: var(--muted2); cursor: pointer; display: grid; place-items: center; }

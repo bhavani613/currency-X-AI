@@ -23,6 +23,13 @@ class PaymentAnalysis(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
+    # Link to the user who created this analysis (nullable for backward compat)
+    user_id: Mapped[str | None] = mapped_column(
+        PG_UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     source_currency: Mapped[str] = mapped_column(String(3), nullable=False)
     destination_country: Mapped[str] = mapped_column(String(100), nullable=False)

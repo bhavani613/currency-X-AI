@@ -170,6 +170,7 @@ export async function analyzePayment({
       destination_currency: destinationCurrency,
       purpose,
     },
+    auth: true,
   });
   return normalizeAnalysisResponse(data, {
     amount,
@@ -386,6 +387,7 @@ export async function getAdvisorInsights({
 }) {
   return request("/advisor/analyze", {
     method: "POST",
+    auth: true,
     body: {
       amount,
       source_currency: sourceCurrency,
@@ -400,9 +402,16 @@ export async function getAdvisorInsights({
  * createPaymentOrder — POST /payments/create-order
  * Returns { success, order_id, amount (paise), currency, key_id }.
  * The secret key never touches the frontend.
+ * When recovery_case_id is provided, the order is linked to that recovery case
+ * so successful verification can mark the case as recovered server-side.
  */
-export async function createPaymentOrder({ amount, currency = "INR", receipt }) {
-  return paymentRequest("/payments/create-order", { amount, currency, receipt });
+export async function createPaymentOrder({ amount, currency = "INR", receipt, recovery_case_id }) {
+  return paymentRequest("/payments/create-order", {
+    amount,
+    currency,
+    receipt,
+    ...(recovery_case_id && { recovery_case_id }),
+  });
 }
 
 /**

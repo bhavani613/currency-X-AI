@@ -16,7 +16,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.deps import get_current_user
 from app.database.connection import get_session
+from app.models import User
 from app.schemas.payment import (
     PaymentAnalysisDetailResponse,
     PaymentAnalysisRequest,
@@ -47,14 +49,15 @@ _analyzer = PaymentAnalyzer()
 )
 async def analyze_payment(
     request: PaymentAnalysisRequest,
+    user: User = Depends(get_current_user),
     session: AsyncSession | None = Depends(get_session),
 ) -> PaymentAnalysisResponse:
     """Calculate an estimated cost breakdown for a cross-border payment.
 
     The calculation is performed inside :class:`PaymentAnalyzer`.  If a
-    database session is available the result is persisted; database
-    failures are logged but do **not** prevent the response from being
-    returned.
+    database session is available the result is persisted with the authenticated
+    user's ID; database failures are logged but do **not** prevent the response
+    from being returned.
     """
     try:
         result = _analyzer.analyze(request)
@@ -64,7 +67,7 @@ async def analyze_payment(
     if session is not None:
         try:
             repo = PaymentRepository(session)
-            db_record = await repo.save(result)
+            db_record = await repo.save(result, user_id=user.id)
             result.id = db_record.id
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to persist payment analysis: %s", exc)
@@ -77,21 +80,22 @@ async def analyze_payment(
     response_model=list[PaymentHistoryItem],
     summary="Get recent payment analyses",
     description=(
-        "Returns up to ``limit`` recent payment analysis records ordered "
-        "by creation date descending."
+        "Returns up to ``limit`` recent payment analysis records for the "
+        "authenticated user, ordered by creation date descending."
     ),
 )
 async def get_payment_history(
     limit: int = 10,
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[PaymentHistoryItem]:
-    """Return a list of recent payment analyses."""
+    """Return a list of recent payment analyses for the authenticated user."""
     if session is None:
         raise HTTPException(
             status_code=503, detail="Database is not configured."
         )
     repo = PaymentRepository(session)
-    records = await repo.get_recent(limit=limit)
+    records = await repo.get_recent(limit=limit, user_id=user.id)
     return [PaymentRepository.to_history_item(r) for r in records]
 
 
@@ -101,20 +105,21 @@ async def get_payment_history(
     summary="Get a single payment analysis by ID",
     description=(
         "Returns the complete saved analysis including payment-method "
-        "comparisons."
+        "comparisons. Users can only access their own analyses."
     ),
 )
 async def get_payment_detail(
     payment_id: UUID,
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> PaymentAnalysisDetailResponse:
-    """Retrieve a single payment analysis and its comparison rows."""
+    """Retrieve a single payment analysis (only if owned by the authenticated user)."""
     if session is None:
         raise HTTPException(
             status_code=503, detail="Database is not configured."
         )
     repo = PaymentRepository(session)
-    record = await repo.get_by_id(payment_id)
+    record = await repo.get_by_id(payment_id, user_id=user.id)
     if record is None:
         raise HTTPException(
             status_code=404,

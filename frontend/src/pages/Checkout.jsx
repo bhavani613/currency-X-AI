@@ -5,7 +5,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import PaymentMethodCard from "../components/PaymentMethodCard";
 import PasswordConfirmModal from "../components/PasswordConfirmModal";
-import { createPaymentOrder, verifyPayment, analyzeFailure, completeRecoveryCase } from "../services/api";
+import { createPaymentOrder, verifyPayment, analyzeFailure } from "../services/api";
 import { saveTransaction } from "../services/transactionService";
 import { currencySymbol } from "../services/currencies";
 
@@ -146,21 +146,11 @@ export default function Checkout() {
 
     // Check if this payment originated from a recovery retry
     const recoveryCaseId = sessionStorage.getItem("currencyx_recovery_case_id");
-    const recoveryAmount = sessionStorage.getItem("currencyx_recovery_amount");
     const isRecoveryRetry = Boolean(recoveryCaseId);
 
     // Clear recovery context from sessionStorage
     sessionStorage.removeItem("currencyx_recovery_case_id");
     sessionStorage.removeItem("currencyx_recovery_amount");
-
-    // If this was a recovery retry, mark the recovery case as recovered
-    // Fire-and-forget: do not block the user navigation on this
-    if (isRecoveryRetry) {
-      const recoveredAmount = recoveryAmount ? parseFloat(recoveryAmount) : undefined;
-      completeRecoveryCase(recoveryCaseId, recoveredAmount).catch(() => {
-        // Non-critical: recovery tracking failure should not block the user
-      });
-    }
 
     setPaying(false);
     navigate("/payment-success", {
@@ -187,10 +177,13 @@ export default function Checkout() {
 
     try {
       // 1. Create the payment order on the backend (TEST MODE or DEMO MODE)
+      // If this is a recovery retry, link the order to the recovery case
+      const recoveryCaseId = sessionStorage.getItem("currencyx_recovery_case_id");
       const order = await createPaymentOrder({
         amount: payInr, // always INR payable amount
         currency: "INR",
         receipt: `currencyx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        recovery_case_id: recoveryCaseId || undefined,
       });
 
       // DEMO MODE — show the simulation panel instead of opening Razorpay.

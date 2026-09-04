@@ -1,0 +1,39 @@
+# Environment variables (never commit secrets)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Database
+pgdata/
+
+# Frontend
+node_modules/
+dist/
+.vite/
+
+# Temporary debug files
+backend/_*.txt
+backend/_probe.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
