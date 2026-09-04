@@ -279,15 +279,39 @@ export default function AIAdvisor() {
             <section className="card advisor-summary">
               <div className="card-head">
                 <h3><Lightbulb size={16} /> AI Summary</h3>
-                {(() => {
-                  const meta = RISK_META[advice.risk_level] || RISK_META.low;
-                  const Icon = meta.icon;
-                  return (
-                    <span className={meta.cls}><Icon size={13} /> {meta.label}</span>
-                  );
-                })()}
+                <div className="card-head-badges">
+                  {advice.ai_enhanced && (
+                    <span className="badge ai-badge"><Sparkles size={12} /> AI Enhanced</span>
+                  )}
+                  {(() => {
+                    const meta = RISK_META[advice.risk_level] || RISK_META.low;
+                    const Icon = meta.icon;
+                    return (
+                      <span className={meta.cls}><Icon size={13} /> {meta.label}</span>
+                    );
+                  })()}
+                </div>
               </div>
-              <p className="advisor-summary-text">{advice.summary}</p>
+              {advice.ai_summary ? (
+                <>
+                  <p className="advisor-summary-text">{advice.ai_summary}</p>
+                  {advice.ai_key_insight && (
+                    <p className="advisor-ai-note"><strong>Key insight:</strong> {advice.ai_key_insight}</p>
+                  )}
+                  {advice.ai_recommended_action && (
+                    <p className="advisor-ai-note"><strong>Recommended:</strong> {advice.ai_recommended_action}</p>
+                  )}
+                  {advice.ai_risk_note && (
+                    <p className="advisor-ai-note"><strong>Risk note:</strong> {advice.ai_risk_note}</p>
+                  )}
+                  <details className="advisor-deterministic-fallback">
+                    <summary>Show deterministic analysis</summary>
+                    <p className="advisor-summary-text">{advice.summary}</p>
+                  </details>
+                </>
+              ) : (
+                <p className="advisor-summary-text">{advice.summary}</p>
+              )}
               <div className="summary-rows">
                 <div>
                   <span>Recommended method</span>

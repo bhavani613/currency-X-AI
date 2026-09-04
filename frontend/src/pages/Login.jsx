@@ -120,9 +120,9 @@ export default function Login() {
                 />
                 <span>Remember me</span>
               </label>
-              <a href="#forgot" className="forgot" onClick={(e) => e.preventDefault()}>
+              <Link to="/forgot-password" className="forgot">
                 Forgot password?
-              </a>
+              </Link>
             </div>
 
             <button className="btn btn-primary btn-block" disabled={loading}>

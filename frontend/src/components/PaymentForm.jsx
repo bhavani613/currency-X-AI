@@ -9,7 +9,7 @@ import {
 export default function PaymentForm({ form, onChange, onSubmit, submitting }) {
   const sourceSymbol = currencySymbol(form.sourceCurrency || DEFAULT_SOURCE_CURRENCY);
 
-  return (
+    return (
     <form className="payment-form" onSubmit={onSubmit}>
       <div className="field">
         <label htmlFor="pf-amount">Amount you send</label>
@@ -28,35 +28,34 @@ export default function PaymentForm({ form, onChange, onSubmit, submitting }) {
         </div>
       </div>
 
-      <div className="field two-col">
-        <div>
-          <label htmlFor="pf-source">Source currency</label>
-          <select
-            id="pf-source"
-            value={form.sourceCurrency || DEFAULT_SOURCE_CURRENCY}
-            onChange={(e) => onChange({ ...form, sourceCurrency: e.target.value })}
-          >
-            {CURRENCIES.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.code} — {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="pf-purpose-2">Purpose</label>
-          <select
-            id="pf-purpose-2"
-            value={form.purpose}
-            onChange={(e) => onChange({ ...form, purpose: e.target.value })}
-          >
-            {PURPOSES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="field">
+        <label htmlFor="pf-source">Source currency</label>
+        <select
+          id="pf-source"
+          value={form.sourceCurrency || DEFAULT_SOURCE_CURRENCY}
+          onChange={(e) => onChange({ ...form, sourceCurrency: e.target.value })}
+        >
+          {CURRENCIES.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.code} — {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="field">
+        <label htmlFor="pf-purpose">Purpose</label>
+        <select
+          id="pf-purpose"
+          value={form.purpose}
+          onChange={(e) => onChange({ ...form, purpose: e.target.value })}
+        >
+          {PURPOSES.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="swap-arrow">

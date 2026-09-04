@@ -1,0 +1,6 @@
+# Development / test-only dependencies (never needed at runtime).
+# Install with:  pip install -r requirements-dev.txt
+pytest
+pytest-asyncio
+httpx
+aiosqlite

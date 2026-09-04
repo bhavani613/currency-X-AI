@@ -7,6 +7,7 @@ import {
   ListOrdered,
   UserCircle,
   LogOut,
+  RefreshCcw,
   Search,
   Sparkles,
   ArrowUpRight,
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/analyze", label: "Analyze Payment", icon: ArrowLeftRight },
   { to: "/advisor", label: "AI Advisor", icon: Bot },
+  { to: "/recovery", label: "Revenue Recovery", icon: RefreshCcw },
   { to: "/transactions", label: "Transactions", icon: ListOrdered },
   { to: "/profile", label: "Profile", icon: UserCircle },
 ];
@@ -37,7 +39,7 @@ const statusClass = (s) => {
 
 const fmt = (n) => n.toLocaleString("en-IN");
 
-function DashboardShell({ active, children }) {
+export function DashboardShell({ active, children }) {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const firstName = "there";

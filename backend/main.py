@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 
+import asyncio
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,7 +9,9 @@ from app.api.payments import router as payments_router
 from app.api.razorpay_pay import router as razorpay_router
 from app.api.advisor import router as advisor_router
 from app.api.auth import router as auth_router
-from app.database.connection import init_db
+from app.api.revenue_recovery import router as recovery_router
+from app.database.connection import init_db, engine
+from app.config import settings
 
 
 @asynccontextmanager
@@ -24,11 +28,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS configuration for the React frontend
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+# CORS configuration for the React frontend — explicit allowlist loaded
+# from the CORS_ORIGINS environment variable (see app/config.py).
+origins = settings.cors_origins
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,6 +45,7 @@ app.include_router(payments_router, prefix="/api/v1")
 app.include_router(razorpay_router, prefix="/api/v1")
 app.include_router(advisor_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(recovery_router, prefix="/api/v1")
 
 
 @app.get("/")
@@ -56,6 +59,25 @@ def health():
         "status": "healthy",
         "service": "CurrencyX AI API",
     }
+
+
+@app.get("/ready")
+async def ready():
+    """Readiness probe — reports whether the database is reachable.
+
+    Lightweight (single ``SELECT 1`` with a short timeout) and unauthenticated
+    by design so load balancers / the frontend status indicator can call it.
+    """
+    if engine is None:
+        return {"status": "degraded", "database": "not_configured"}
+    try:
+        from sqlalchemy import text
+
+        async with engine.connect() as conn:
+            await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=3)
+        return {"status": "ready", "database": "connected"}
+    except Exception:  # noqa: BLE001 — readiness must never raise
+        return {"status": "degraded", "database": "unavailable"}
 
 
 @app.get("/api/v1/info")

@@ -33,7 +33,10 @@ export default function Signup() {
     if (!form.email.trim()) e.email = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Enter a valid email";
     if (!form.password) e.password = "Password is required";
-    else if (form.password.length < 8) e.password = "Password must be at least 8 characters";
+    else if (passwordChecks.some((c) => !c.ok)) {
+      const failed = passwordChecks.filter((c) => !c.ok).map((c) => c.label.toLowerCase());
+      e.password = `Password needs: ${failed.join(", ")}`;
+    }
     if (form.confirm !== form.password) e.confirm = "Passwords do not match";
     if (!form.agreed) e.agreed = "You must accept the Terms and Privacy Policy";
     return e;
@@ -57,12 +60,25 @@ export default function Signup() {
     }
   };
 
-  const passwordHints =
-    form.password.length > 0 && form.password.length < 8 ? (
-      <li className="hint error">At least 8 characters needed</li>
-    ) : form.password.length >= 8 ? (
-      <li className="hint ok"><Check size={12} /> Looks good</li>
-    ) : null;
+  // Strong-password requirement checklist (mirrors backend validation).
+  const passwordChecks = [
+    { label: "At least 8 characters", ok: form.password.length >= 8 },
+    { label: "Uppercase letter", ok: /[A-Z]/.test(form.password) },
+    { label: "Lowercase letter", ok: /[a-z]/.test(form.password) },
+    { label: "Number", ok: /\d/.test(form.password) },
+    { label: "Special character", ok: /[^A-Za-z0-9\s]/.test(form.password) },
+    { label: "No spaces", ok: form.password.length > 0 && !/\s/.test(form.password) },
+  ];
+  const passwordOk = passwordChecks.every((c) => c.ok);
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
+  const canSubmit =
+    !loading &&
+    form.fullName.trim().length > 0 &&
+    emailOk &&
+    passwordOk &&
+    form.confirm === form.password &&
+    form.confirm.length > 0 &&
+    form.agreed;
 
   return (
     <div className="auth-screen site">
@@ -138,7 +154,13 @@ export default function Signup() {
                 </button>
               </div>
               {errors.password && <span className="field-error">{errors.password}</span>}
-              {passwordHints ? <ul className="password-hints">{passwordHints}</ul> : null}
+              <ul className="password-hints pw-req">
+                {passwordChecks.map((c) => (
+                  <li key={c.label} className={`hint ${c.ok ? "ok" : "error"}`}>
+                    <Check size={12} /> {c.label}
+                  </li>
+                ))}
+              </ul>
             </div>
 <div className="field">
               <label htmlFor="su-confirm">Confirm Password</label>
@@ -169,7 +191,7 @@ export default function Signup() {
             </label>
             {errors.agreed && <span className="field-error">{errors.agreed}</span>}
 
-            <button className="btn btn-primary btn-block" disabled={loading}>
+            <button className="btn btn-primary btn-block" disabled={!canSubmit}>
               {loading ? "Creating account…" : "Create Account"}
             </button>
           </form>

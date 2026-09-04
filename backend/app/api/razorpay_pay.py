@@ -11,14 +11,22 @@ returned to the frontend so it can open Razorpay Checkout.
 import logging
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.deps import get_optional_user
+from app.database.connection import get_session
+from app.models import User
+from app.core.deps import get_current_user
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(get_current_user)],
+)
 
 # Currencies Razorpay accepts in test mode for this prototype.
 SUPPORTED_CURRENCIES = {"INR"}
@@ -30,6 +38,9 @@ class CreateOrderRequest(BaseModel):
     amount: float = Field(..., gt=0, description="Amount in major currency units, e.g. 1000 for ₹1000.")
     currency: str = Field("INR", description="Currency code, e.g. INR.")
     receipt: str = Field(..., min_length=1, description="Unique receipt id for the order.")
+    payment_method: str = Field(
+        "Smart Payment", max_length=50, description="User-selected payment method (tracking only)."
+    )
 
 
 class CreateOrderResponse(BaseModel):
@@ -40,6 +51,8 @@ class CreateOrderResponse(BaseModel):
     amount: int  # smallest currency unit (paise for INR)
     currency: str
     key_id: str
+    # When True, this is a simulated DEMO order (no real Razorpay checkout).
+    demo: bool = False
 
 
 class VerifyPaymentRequest(BaseModel):
@@ -78,7 +91,11 @@ def _get_client():
     response_model=CreateOrderResponse,
     summary="Create a Razorpay order (TEST MODE)",
 )
-async def create_order(request: CreateOrderRequest) -> CreateOrderResponse:
+async def create_order(
+    request: CreateOrderRequest,
+    user: User | None = Depends(get_optional_user),
+    session: AsyncSession | None = Depends(get_session),
+) -> CreateOrderResponse:
     """Create a Razorpay order and return only safe data to the frontend."""
     currency = request.currency.strip().upper()
     if currency not in SUPPORTED_CURRENCIES:
@@ -93,6 +110,21 @@ async def create_order(request: CreateOrderRequest) -> CreateOrderResponse:
     amount_paise = int(round(request.amount * 100))
     if amount_paise <= 0:
         raise HTTPException(status_code=422, detail="Amount must be greater than 0.")
+
+    # --- DEMO MODE ------------------------------------------------------
+    # When RAZORPAY_DEMO_MODE=true we return a clearly-identifiable simulated
+    # order (demo_order_*) instead of calling the real Razorpay API. No keys
+    # are required and no money ever moves.
+    if settings.RAZORPAY_DEMO_MODE:
+        demo_order_id = f"demo_order_{uuid.uuid4().hex[:12]}"
+        return CreateOrderResponse(
+            success=True,
+            order_id=demo_order_id,
+            amount=amount_paise,
+            currency=currency,
+            key_id="demo",  # public placeholder — never used to open real checkout
+            demo=True,
+        )
 
     client = _get_client()
     receipt = request.receipt.strip() or f"currencyx-{uuid.uuid4().hex[:10]}"
@@ -127,9 +159,32 @@ async def create_order(request: CreateOrderRequest) -> CreateOrderResponse:
 async def verify_payment(request: VerifyPaymentRequest) -> dict:
     """Verify the checkout signature using the official Razorpay SDK.
 
-    On failure a safe HTTP error is returned; the payment is never
-    falsely marked as successful.
+    In DEMO MODE, simulated payments (order id ``demo_order_*`` and payment
+    id ``demo_payment_*``) are accepted as verified WITHOUT any signature
+    check — they represent a simulated success and never move real money.
+    Real TEST MODE verification is untouched and only used when keys exist.
     """
+    if settings.RAZORPAY_DEMO_MODE:
+        if (
+            request.razorpay_order_id.startswith("demo_order_")
+            and request.razorpay_payment_id.startswith("demo_payment_")
+        ):
+            return {
+                "success": True,
+                "message": "Demo payment verified successfully. No real money was charged.",
+                "demo": True,
+            }
+        # Demo mode with no valid keys cannot verify a real Razorpay signature.
+        if not settings.RAZORPAY_KEY_ID or not settings.RAZORPAY_KEY_SECRET:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Demo mode is active and this payment is not a demo payment. "
+                    "Use the demo payment flow (Simulate Successful/Failed Payment)."
+                ),
+            )
+        # Keys are configured — fall through to the real signature check below.
+
     client = _get_client()
     try:
         client.utility.verify_payment_signature(

@@ -27,3 +27,10 @@ class AdvisorResponse(BaseModel):
     risk_level: str = Field(..., pattern=r"^(low|medium|high)$")
     tips: list[str]
     disclaimer: str
+    # True when the response was enhanced by the optional LLM layer
+    ai_enhanced: bool = False
+    # AI-generated explanation fields (only present when ai_enhanced=true)
+    ai_summary: str | None = None
+    ai_key_insight: str | None = None
+    ai_recommended_action: str | None = None
+    ai_risk_note: str | None = None

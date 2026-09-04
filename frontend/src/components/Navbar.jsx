@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { Menu, X, BarChart3 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import BackendStatus from "./BackendStatus";
 
 function BrandMark() {
   return (
@@ -31,6 +32,7 @@ export default function Navbar() {
         { to: "/dashboard", label: "Dashboard" },
         { to: "/analyze", label: "Analyze" },
         { to: "/advisor", label: "AI Advisor" },
+        { to: "/recovery", label: "Revenue Recovery" },
         { to: "/transactions", label: "Transactions" },
       ]
     : [
@@ -43,6 +45,7 @@ export default function Navbar() {
     <header className="navbar">
       <div className="navbar-inner container">
         <BrandMark />
+        <BackendStatus />
 
         <nav className={`nav-links ${open ? "open" : ""}`}>
           {links.map((l) => (

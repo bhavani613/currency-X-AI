@@ -1,15 +1,21 @@
-"""Rule-based AI Advisor service.
+"""Rule-based AI Advisor service with optional LLM explanation layer.
 
 Generates intelligent, structured insights from the existing
-:class:`PaymentAnalyzer` results.  No external AI/LLM API is required — the
-logic is deterministic and transparent.  The interface (``analyze`` returning
-a structured response) is deliberately shaped so a real LLM integration can
-be dropped in later without touching the route layer.
+:class:`PaymentAnalyzer` results.  The deterministic logic is the source of
+truth and always runs.  When ``AI_ENABLED=true`` and a valid API key is
+configured, an optional LLM layer enhances the user-facing explanation on top
+of the deterministic result.
+
+The route layer is untouched — ``analyze()`` still returns ``AdvisorResponse``.
 """
+
+import logging
 
 from app.schemas.advisor import AdvisorInsight, AdvisorResponse
 from app.schemas.payment import PaymentAnalysisRequest, PaymentAnalysisResponse
 from app.services.payment_analyzer import DISCLAIMER, PaymentAnalyzer
+
+logger = logging.getLogger(__name__)
 
 #: Source-currency symbol used when composing human-readable text.
 CURRENCY_SYMBOLS = {
@@ -36,9 +42,55 @@ class AdvisorService:
         self._analyzer = analyzer if analyzer is not None else PaymentAnalyzer()
 
     def analyze(self, request: PaymentAnalysisRequest) -> AdvisorResponse:
-        """Run the payment analysis and derive advisor guidance from it."""
+        """Run the payment analysis and derive advisor guidance from it.
+
+        The deterministic analysis always runs first. If the optional LLM layer
+        is configured and available, the response is enhanced with an AI-generated
+        explanation. Any LLM failure silently falls back to the deterministic result.
+        """
         analysis: PaymentAnalysisResponse = self._analyzer.analyze(request)
-        return self._compose(request, analysis)
+        response = self._compose(request, analysis)
+        return self._maybe_enhance_with_ai(request, analysis, response)
+
+    def _maybe_enhance_with_ai(
+        self,
+        request: PaymentAnalysisRequest,
+        analysis: PaymentAnalysisResponse,
+        response: AdvisorResponse,
+    ) -> AdvisorResponse:
+        """Optionally enhance the deterministic response with an LLM explanation.
+
+        Never raises — any failure returns the deterministic response unchanged.
+        """
+        try:
+            from app.services.ai_provider import enhance_advisor_explanation
+        except ImportError:
+            return response
+
+        symbol = CURRENCY_SYMBOLS.get(request.source_currency, f"{request.source_currency} ")
+        amount_text = f"{symbol}{request.amount:,.0f}"
+        dest_text = f"{request.destination_country} ({request.destination_currency})"
+        insight_descriptions = [i.description for i in response.insights]
+
+        ai_result = enhance_advisor_explanation(
+            analysis_summary=response.summary,
+            insights=insight_descriptions,
+            recommended_method=response.recommended_method,
+            risk_level=response.risk_level,
+            amount=amount_text,
+            source_currency=request.source_currency,
+            destination=dest_text,
+        )
+        if ai_result is None:
+            return response
+
+        # Merge AI explanation into the response — deterministic fields stay authoritative
+        response.ai_enhanced = True
+        response.ai_summary = ai_result.get("summary")
+        response.ai_key_insight = ai_result.get("key_insight")
+        response.ai_recommended_action = ai_result.get("recommended_action")
+        response.ai_risk_note = ai_result.get("risk_note")
+        return response
 
     def _risk_level(
         self, request: PaymentAnalysisRequest, fee_pct: float

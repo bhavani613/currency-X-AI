@@ -16,7 +16,8 @@ export default function PaymentSuccess() {
   // sessionStorage is the fallback for a same-session refresh.
   const payment = (() => {
     try {
-      const orderId = JSON.parse(sessionStorage.getItem("currencyx_last_payment") || "null")?.orderId;
+      const last = JSON.parse(sessionStorage.getItem("currencyx_last_payment") || "null");
+      const orderId = last?.orderId;
       const stored = getStoredTransactions();
       const saved = orderId && stored.find((t) => t.razorpay_order_id === orderId);
       if (saved) {
@@ -27,13 +28,17 @@ export default function PaymentSuccess() {
           currency: saved.currency,
           method: saved.payment_method,
           timestamp: saved.created_at,
+          demo: Boolean(last?.demo),
         };
       }
-      return JSON.parse(sessionStorage.getItem("currencyx_last_payment")) || null;
+      return last || null;
     } catch {
       return null;
     }
   })();
+
+  const isDemo = Boolean(state.demo || payment?.demo);
+  const isRecoveryRetry = Boolean(state.isRecoveryRetry);
 
   const txnId = payment?.paymentId || "—";
   const orderId = payment?.orderId || "—";
@@ -73,13 +78,28 @@ export default function PaymentSuccess() {
           <div className="success-check">
             <Check size={40} strokeWidth={3} />
           </div>
-          <h1 className="success-title">✓ Payment Verified Successfully</h1>
+          {isDemo && <span className="demo-badge">DEMO MODE</span>}
+          <h1 className="success-title">
+            {isRecoveryRetry
+              ? isDemo
+                ? "✓ Demo Recovery Successful"
+                : "✓ Payment Successful — Revenue Recovered"
+              : isDemo
+                ? "✓ Demo Payment Successful"
+                : "✓ Payment Verified Successfully"}
+          </h1>
           <p className="success-sub">
-            Your international transfer is being processed.
+            {isRecoveryRetry
+              ? isDemo
+                ? "This was a simulated recovery payment — no real money was charged. The recovery case has been marked as recovered."
+                : "Your retry payment was successful and the recovery case has been marked as recovered."
+              : isDemo
+                ? "This was a simulated payment — no real money was charged."
+                : "Your international transfer is being processed."}
           </p>
 
           <div className="txn-row">
-            <span className="txn-label">Razorpay Payment ID</span>
+            <span className="txn-label">{isDemo ? "Demo Payment ID" : "Razorpay Payment ID"}</span>
             <span className="txn-value">
               {txnId}
               <button className="icon-btn" onClick={copy} aria-label="Copy payment id">
@@ -88,7 +108,7 @@ export default function PaymentSuccess() {
             </span>
           </div>
           <div className="txn-row">
-            <span className="txn-label">Razorpay Order ID</span>
+            <span className="txn-label">{isDemo ? "Demo Order ID" : "Razorpay Order ID"}</span>
             <span className="txn-value">{orderId}</span>
           </div>
 
@@ -109,7 +129,9 @@ export default function PaymentSuccess() {
           </div>
 
           <div className="success-note">
-            Payment verified via Razorpay TEST MODE signature verification. No real money moves.
+            {isDemo
+              ? "Demo payment simulated by CurrencyX AI. No real money moved and no Razorpay transaction was created."
+              : "Payment verified via Razorpay TEST MODE signature verification. No real money moves."}
           </div>
         </div>
       </div>
